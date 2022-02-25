@@ -1,0 +1,25 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-partition-example
+  namespace: chaos-testing
+spec:
+  action: partition
+  mode: one
+  selector:
+    namespaces:
+      - bookinfo
+    labelSelectors:
+      'app' : 'reviews'
+      'version' : 'v2'
+  direction: to
+  target:
+    selector:
+      namespaces:
+        - bookinfo
+      labelSelectors:
+        'app' : 'ratings'
+    mode: one
+  duration: '10s'
+  scheduler:
+    cron: '@every 15s'

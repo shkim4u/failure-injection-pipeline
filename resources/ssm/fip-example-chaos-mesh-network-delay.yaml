@@ -1,0 +1,20 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay
+  namespace: chaos-testing
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - default
+    labelSelectors:
+      'app' : 'ecsdemo-nodejs'
+  delay:
+    latency: "5000ms"
+    correlation: "100"
+    jitter: "10ms"
+  duration: "30s"
+  scheduler:
+    cron: "@every 60s"

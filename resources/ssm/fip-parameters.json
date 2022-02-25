@@ -1,0 +1,48 @@
+{
+  "RegionName": "ap-northeast-1",
+  "StopEventRuleName": "fip-example-evtbridge-failsafe",
+  "CrossAccount_RoleARN": "arn:aws:iam::195998402121:role/fip-cross",
+  "FailAz":
+  {
+    "Enable": "yes",
+    "AzName": "ap-northeast-1c",
+    "VpcId": "vpc-00ada0692cfa29eed",
+    "DurationSec": "180",
+    "TagName": "fip",
+    "TagValue": "yes"
+  },
+  "FailEc2":
+  {
+    "Enable": "no",
+    "VpcId": "vpc-00ada0692cfa29eed",
+    "IntervalSec": "15",
+    "Iteration": "2",
+    "Percent": "100",
+    "Action": "stop",
+    "TagName": "fip",
+    "TagValue": "yes"
+  },
+  "FailRds":
+  {
+    "Enable": "no",
+    "IntervalSec": "180",
+    "Iteration": "1",
+    "TagName": "fip",
+    "TagValue": "yes"
+  },
+  "FailEks":
+  {
+    "Enable": "no",
+    "DurationSec": "180",
+    "Cluster": "eksworkshop-eksctl",
+    "Role": "arn:aws:iam::195998402121:role/fip-cross"
+  },
+  "FailSSM":
+  {
+    "EnableCPU": "no",
+    "EnableMemory": "no",
+    "EnableNetwork": "no",
+    "EnableDisk": "no",
+    "ParameterSource": "fip-ssm"
+  }
+}

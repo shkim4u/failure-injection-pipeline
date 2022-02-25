@@ -1,0 +1,30 @@
+{
+  "CpuStress":
+  {
+    "DurationSec": "180",
+    "TagName": "fipssm",
+    "TagValue": "yes"
+  },
+  "MemoryStress":
+  {
+    "DurationSec": "180",
+    "Percent": "99",
+    "TagName": "fipssm",
+    "TagValue": "yes"
+  },
+  "NetworkLatency":
+  {
+    "DurationSec": "180",
+    "DelayMillisec": "1000",
+    "Interface": "eth0",
+    "TagName": "fipssm",
+    "TagValue": "yes"
+  },
+  "DiskStress":
+  {
+    "Path": "/",
+    "DurationSec": "120",
+    "TagName": "fipssm",
+    "TagValue": "yes"
+  }
+}

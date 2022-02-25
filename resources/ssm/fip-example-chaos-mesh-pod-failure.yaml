@@ -1,0 +1,17 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-example
+  namespace: chaos-testing
+spec:
+  action: pod-failure
+  mode: one
+  value: ''
+  duration: '180s'
+  selector:
+    namespaces:
+      - default
+    labelSelectors:
+      'app' : 'ecsdemo-crystal'
+  scheduler:
+    cron: '@every 10s'
