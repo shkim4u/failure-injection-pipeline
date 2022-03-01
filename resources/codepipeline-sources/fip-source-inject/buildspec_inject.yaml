@@ -1,0 +1,200 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  build:
+    commands:
+      - export FIP___ADR=$AWS_DEFAULT_REGION
+      - echo $FIP___ADR
+
+      - PARAM_SRC=$(aws ssm get-parameter --name "fip-parameters-source" | jq -r ".Parameter.Value")
+      - PARAM=$(aws ssm get-parameter --name "${PARAM_SRC}")
+
+      - export FIP_RegionName=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .RegionName")
+
+      - export FIP_FailAz_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.Enable")
+      - export FIP_FailAz_AzName=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.AzName")
+      - export FIP_FailAz_VpcId=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.VpcId")
+      - export FIP_FailAz_DurationSec=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.DurationSec")
+      - export FIP_FailAz_TagName=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.TagName")
+      - export FIP_FailAz_TagValue=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailAz.TagValue")
+
+      - export FIP_FailEc2_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.Enable")
+      - export FIP_FailEc2_IntervalSec=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.IntervalSec")
+      - export FIP_FailEc2_Iteration=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.Iteration")
+      - export FIP_FailEc2_Percent=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.Percent")
+      - export FIP_FailEc2_Action=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.Action")
+      - export FIP_FailEc2_TagName=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.TagName")
+      - export FIP_FailEc2_TagValue=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEc2.TagValue")
+
+      - export FIP_FailRds_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailRds.Enable")
+      - export FIP_FailRds_IntervalSec=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailRds.IntervalSec")
+      - export FIP_FailRds_Iteration=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailRds.Iteration")
+      - export FIP_FailRds_TagName=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailRds.TagName")
+      - export FIP_FailRds_TagValue=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailRds.TagValue")
+
+      - export FIP_FailEks_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailEks.Enable")
+      - export FIP_CrossAccount_RoleARN=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .CrossAccount_RoleARN")
+      
+      - export FIP_SSM_Cpu_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailSSM.EnableCPU")
+      - export FIP_SSM_Memory_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailSSM.EnableMemory")
+      - export FIP_SSM_Network_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailSSM.EnableNetwork")
+      - export FIP_SSM_Disk_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailSSM.EnableDisk")
+      
+      - export FIP_FailNw_Enable=$(echo $PARAM | jq -r ".Parameter.Value | fromjson | .FailNw.Enable")
+
+      - |
+        if [ "$FIP_FailAz_Enable" = 'yes' ]
+        then
+            echo "AZ FI enabled"
+            pip install -r scripts/requirements.txt
+            bash snapshot.sh "before AZ failure (steady-state)"
+            
+            aws ssm put-parameter --name "/fip/recovery/failaz" --type "String" --value "[]" --tier Intelligent-Tiering --overwrite 2>&1 > /dev/null
+            echo "Cleared recovery records at /fip/recovery/failaz"
+
+            aws sts assume-role --role-arn $FIP_CrossAccount_RoleARN --role-session-name AWSCLI-Session | tee credential_temp.json 2>&1 > /dev/null
+            export AWS_ACCESS_KEY_ID=$(jq -r .Credentials.AccessKeyId credential_temp.json)
+            export AWS_SECRET_ACCESS_KEY=$(jq -r .Credentials.SecretAccessKey credential_temp.json)
+            export AWS_SESSION_TOKEN=$(jq -r .Credentials.SessionToken credential_temp.json)
+            export AWS_DEFAULT_REGION=$FIP_RegionName
+            
+            if [ -z "$FIP_FailAz_TagName" ] 
+            then
+                echo "No VPC tag key is supplied, all VPC will be targeted"
+                export FIP_FailAz___Filters=
+                export FIP_FailAz___TagParam=
+            else
+                echo "Tagged VPC (Key: $FIP_FailAz_TagName, Val: $FIP_FailAz_TagValue) will be targeted"
+                export FIP_FailAz___Filters="--filters Name=tag-key,Values=${FIP_FailAz_TagName} Name=tag-value,Values=${FIP_FailAz_TagValue}"
+                export FIP_FailAz___TagKvParam="--tag-name ${FIP_FailAz_TagName} --tag-value ${FIP_FailAz_TagValue}"
+            fi
+            
+            export FIP_FailAz___VpcIds=$(aws ec2 describe-vpcs ${FIP_FailAz___Filters} --query 'Vpcs[*].[VpcId]' --output text)
+            export FIP_FailAz___VpcIdsCnt=$(echo $FIP_FailAz___VpcIds | wc -w)
+            echo "${FIP_FailAz___VpcIdsCnt} VPC(s) found"
+            echo "VpcId to be isolated for AZ failure:"
+            echo $FIP_FailAz___VpcIds
+            echo ""
+            
+            if [ ! -z "$FIP_FailAz___VpcIds" ]
+            then
+                while IFS= read -r FIP_FailAz___VpcIds; do
+                    if [ ! -z "$FIP_FailAz___VpcIds" ]
+                    then
+                        echo "Failing VpcId: $FIP_FailAz___VpcIds"
+                        python scripts/fail_az.py --region $FIP_RegionName --vpc-id $FIP_FailAz___VpcIds --az-name $FIP_FailAz_AzName --duration $FIP_FailAz_DurationSec ${FIP_FailAz___TagKvParam} --log-level INFO --limit-asg --caller-region $FIP___ADR --norm
+                        echo ""
+                    fi
+                done <<< "$FIP_FailAz___VpcIds"
+            fi
+            
+            echo "Failing EKS, RDS, ElastiCache"
+            python scripts/fail_az.py --region $FIP_RegionName --vpc-id vpc_id --az-name $FIP_FailAz_AzName --duration $FIP_FailAz_DurationSec ${FIP_FailAz___TagKvParam} --log-level INFO --failover-rds --failover-elasticache --caller-region $FIP___ADR --failover-eks
+            echo ""
+            
+            echo "Sleeping for pre-configured duration: $FIP_FailAz_DurationSec"
+            sleep $FIP_FailAz_DurationSec
+            echo "Running recovery..."
+            python scripts/fail_az.py --region $FIP_RegionName --vpc-id placeholder --az-name $FIP_FailAz_AzName --duration $FIP_FailAz_DurationSec ${FIP_FailAz___TagKvParam} --log-level INFO --limit-asg --failover-rds --failover-elasticache --recover-only --caller-region $FIP___ADR
+            
+            export AWS_DEFAULT_REGION=$FIP___ADR
+            
+            bash scripts/logfile_to_s3.sh fail-az.log            
+            sleep 60
+
+            bash snapshot.sh "after AZ failure (post-recovery-state)"
+        else
+            echo "AZ FI disabled"
+        fi
+      
+      - |
+        if [ "$FIP_FailEc2_Enable" = 'yes' ]
+        then
+            echo "EC2 FI enabled"
+            bash snapshot.sh "before EC2 failure (steady-state)"
+            for i in $(seq $FIP_FailEc2_Iteration); do
+                bash scripts/fi_ec2.sh
+                sleep $FIP_FailEc2_IntervalSec
+            done
+            sleep 60
+            bash snapshot.sh "after EC2 failure (post-recovery-state)"
+        else
+            echo "EC2 FI disabled"
+        fi
+      
+      - |
+        if [ "$FIP_FailRds_Enable" = 'yes' ]
+        then
+            echo "RDS FI enabled"
+            pip install -r scripts/requirements.txt
+
+            bash snapshot.sh "before RDS failure (steady-state)"
+
+            aws sts assume-role --role-arn $FIP_CrossAccount_RoleARN --role-session-name AWSCLI-Session | tee credential_temp.json
+            export AWS_ACCESS_KEY_ID=$(jq -r .Credentials.AccessKeyId credential_temp.json)
+            export AWS_SECRET_ACCESS_KEY=$(jq -r .Credentials.SecretAccessKey credential_temp.json)
+            export AWS_SESSION_TOKEN=$(jq -r .Credentials.SessionToken credential_temp.json)
+
+            for i in $(seq $FIP_FailRds_Iteration); do
+                python scripts/fail_rds.py --region $FIP_RegionName --vpc-id $FIP_FailAz_VpcId --tag-name $FIP_FailRds_TagName --tag-value $FIP_FailRds_TagValue
+                sleep $FIP_FailRds_IntervalSec
+            done
+            sleep 60
+            bash scripts/logfile_to_s3.sh rds.log
+
+            bash snapshot.sh "after RDS failure (post-recovery-state)"
+        else
+            echo "RDS FI disabled"
+        fi
+      
+      - |
+        if [ "$FIP_SSM_Cpu_Enable" = 'yes' -o "$FIP_SSM_Memory_Enable" = 'yes' -o "$FIP_SSM_Network_Enable" = 'yes' -o "$FIP_SSM_Disk_Enable" = 'yes' ]
+        then
+            bash snapshot.sh "before SSM failure (steady-state)"
+
+            echo "SSM FI enabled"
+            bash scripts/fi_ssm.sh
+
+            sleep 60
+            bash snapshot.sh "after SSM failure (post-recovery-state)"
+        else
+            echo "SSM FI disabled"
+        fi
+
+      - |
+        if [ "$FIP_FailEks_Enable" = 'yes' ]
+        then
+            echo "EKS FI enabled"
+            bash scripts/fi_eks.sh
+        else
+            echo "EKS FI disabled"
+        fi
+
+      - |
+        if [ "$FIP_FailNw_Enable" = 'yes' ]
+        then
+            echo "Nw FI enabled"
+            pip install -r scripts/requirements.txt
+            bash snapshot.sh "before nw failure (steady-state)"
+            
+            aws ssm put-parameter --name "/fip/recovery/failnw" --type "String" --value "[]" --tier Intelligent-Tiering --overwrite 2>&1 > /dev/null
+            echo "Cleared recovery records at /fip/recovery/failnw"
+            
+            python scripts/fail_nw.py --region $FIP___ADR
+            echo ""
+            
+            echo "Running recovery..."
+            python scripts/fail_nw.py --region $FIP___ADR --recover-only
+            echo ""
+            
+            bash scripts/logfile_to_s3.sh fail-nw.log            
+            sleep 60
+
+            bash snapshot.sh "after AZ failure (post-recovery-state)"
+        else
+            echo "Nw FI disabled"
+        fi
+
