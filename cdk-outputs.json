@@ -1,6 +1,6 @@
 {
   "FipStack": {
-    "FIPLoggerParameter": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-param-logger-filename",
+    "FIPLoggerParameter": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-param-logger_filename",
     "FIPBucketParameter": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-param-bucket_name",
     "FIPStackId": "arn:aws:cloudformation:ap-northeast-2:301391518739:stack/FipStack/a7a432c0-9524-11ec-9792-0a6c7211ef76",
     "FIPChaosMeshExampleYaml9": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-chaos-mesh-network-bandwidth",
@@ -16,7 +16,7 @@
     "FIPChaosMeshExampleYaml1": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-chaos-mesh-pod-kill",
     "FIPChaosMeshExampleYaml4": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-chaos-mesh-network-delay-with-target",
     "FIPChaosMeshExampleYaml3": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-chaos-mesh-network-delay",
-    "FIPStopInjectorFunction": "fip-func-stop-injector",
+    "FIPStopInjectorFunction": "fip-func-stop_inject",
     "FIPIstioExampleYaml2": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-Istio-delay2",
     "FIPIstioExampleYaml3": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-Istio-abort",
     "FIPIstioExampleYaml1": "arn:aws:ssm:ap-northeast-2:301391518739:parameter/fip-example-Istio-delay",

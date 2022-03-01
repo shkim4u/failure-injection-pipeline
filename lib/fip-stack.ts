@@ -355,7 +355,7 @@ export class FipStack extends Stack {
       this,
       'fip-func-stop-injector',
       {
-        functionName: 'fip-func-stop-injector',
+        functionName: 'fip-func-stop_inject',
         handler: 'fip-func-stop-injector.lambda_handler',
         runtime: Runtime.PYTHON_3_8,
         memorySize: 512,
@@ -579,9 +579,9 @@ export class FipStack extends Stack {
     // FipLoggerParameter
     const fipLoggerParameter = new ssm.StringParameter(
       this,
-      `${id}-fip-param-logger_filename`,
+      `${id}-fip-param-logger-filename`,
       {
-        parameterName: 'fip-param-logger-filename',
+        parameterName: 'fip-param-logger_filename',
         stringValue: '0',
         description: 'FIP logger filename parameter',
       }
