@@ -1,4 +1,4 @@
-import {aws_codecommit, CfnOutput, RemovalPolicy, Stack, StackProps, Tags} from 'aws-cdk-lib';
+import {aws_apigatewayv2, aws_codecommit, CfnOutput, RemovalPolicy, Stack, StackProps, Tags} from 'aws-cdk-lib';
 import {Construct} from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3'
@@ -10,6 +10,8 @@ import {Function, Runtime, AssetCode} from 'aws-cdk-lib/aws-lambda'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as fs from 'fs'
+import {PolicyStatement} from "aws-cdk-lib/aws-iam";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
 
 export class FipStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -259,6 +261,47 @@ export class FipStack extends Stack {
         actions: [fipOrchestratorPostBuildAction]
       }
     );
+
+    /**
+     * [2022-03-06] KSH: Lambda to trigger orchestrator pipeline.
+     */
+    // You can limit this based upon your use case and AWS Resources you need to deploy.
+    const triggerFunctionPolicy = new PolicyStatement();
+    triggerFunctionPolicy.addActions("*")
+    triggerFunctionPolicy.addResources("*")
+
+    /**
+     * Trigger Lambda function and API Gateway.
+     */
+    // Trigger lambda function.
+    // Note) Use different permission policy for additional needes.
+    const triggerFunction = new Function(
+      this,
+      'fip-func-trigger',
+      {
+        functionName: 'fip-func-trigger',
+        handler: 'fip-func-trigger.lambda_handler',
+        runtime: Runtime.PYTHON_3_8,
+        memorySize: 512,
+        code: new AssetCode('./resources/lambda'),
+        environment: {
+          'CODEPIPELINE_NAME': fipOrchestratorPipeline.pipelineName
+        },
+        initialPolicy: [triggerFunctionPolicy]
+      },
+    );
+
+    // API Gateway
+    const triggerApi = new apigateway.LambdaRestApi(
+      this,
+      'fip-api-trigger',
+      {
+        handler: triggerFunction,
+        proxy: false
+      }
+    );
+    const triggerApiResource = triggerApi.root.addResource('trigger');
+    triggerApiResource.addMethod('POST');
 
     /**
      * Resources: CodePipeline - Injector.
@@ -641,5 +684,7 @@ export class FipStack extends Stack {
     new CfnOutput(this, 'FIPLoggerParameter', { value: fipLoggerParameter.parameterArn });
     new CfnOutput(this, 'FIPBucketParameter', { value: fipBucketParameter.parameterArn });
     new CfnOutput(this, 'FIPExampleFailsafeEventBridgeRule', { value: fipExampleFailsafeEventBridgeRule.ruleName });
+    new CfnOutput(this, 'FIPTriggerFunction', { value: triggerFunction.functionName });
+    new CfnOutput(this, 'FIPTriggerAPIUrl', { value: triggerApi.url });
   }
 }

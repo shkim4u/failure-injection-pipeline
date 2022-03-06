@@ -1,0 +1,2 @@
+1. Lambda with API Gateway: https://docs.aws.amazon.com/ko_kr/lambda/latest/dg/services-apigateway-tutorial.html
+
